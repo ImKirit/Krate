@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file:; style-src 'self' 'unsafe-inline'">
+  <title>Krate</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="logo">
+        <span class="logo-mark">K</span>
+        <span class="logo-text">KRATE</span>
+      </div>
+
+      <nav id="statusNav">
+        <div class="nav-item active" data-status=""><span>All Projects</span><span class="count" id="countAll"></span></div>
+        <div class="nav-item" data-status="active"><span class="dot dot-active"></span><span>Active</span></div>
+        <div class="nav-item" data-status="idea"><span class="dot dot-idea"></span><span>Ideas</span></div>
+        <div class="nav-item" data-status="paused"><span class="dot dot-paused"></span><span>Paused</span></div>
+        <div class="nav-item" data-status="done"><span class="dot dot-done"></span><span>Done</span></div>
+        <div class="nav-item" data-status="archived"><span class="dot dot-archived"></span><span>Archived</span></div>
+      </nav>
+
+      <div class="side-head">
+        <span>TAGS</span>
+      </div>
+      <div id="tagList"></div>
+
+      <div class="side-bottom">
+        <button class="side-btn" id="btnSettings">⚙ Settings</button>
+      </div>
+    </aside>
+
+    <main id="content">
+      <!-- ============================= HOME ============================= -->
+      <div id="homeView">
+        <header class="topbar">
+          <input id="searchInput" type="text" placeholder="Search projects…  (Ctrl+F)" spellcheck="false">
+          <select id="sortSelect">
+            <option value="modified">Last modified</option>
+            <option value="created">Newest</option>
+            <option value="name">Name A–Z</option>
+          </select>
+          <button class="btn btn-primary" id="btnNew">+ New Project</button>
+        </header>
+        <div id="projectGrid"></div>
+      </div>
+
+      <!-- ============================ DETAIL ============================ -->
+      <div id="detailView" hidden>
+        <header class="det-head">
+          <button class="btn btn-ghost" id="btnBack">←</button>
+          <div class="det-cover" id="detCover" title="Click to set a cover image"></div>
+          <div class="det-info">
+            <input id="detTitle" class="title-input" spellcheck="false">
+            <div class="det-meta">
+              <select id="detStatus">
+                <option value="idea">💡 Idea</option>
+                <option value="active">🟢 Active</option>
+                <option value="paused">⏸ Paused</option>
+                <option value="done">✅ Done</option>
+                <option value="archived">📦 Archived</option>
+              </select>
+              <div id="detTags" class="chip-row"></div>
+            </div>
+            <div class="muted small" id="detPath"></div>
+          </div>
+          <button class="btn btn-ghost" id="btnRevealProject" title="Open project folder in Explorer">📂 Explorer</button>
+        </header>
+
+        <div class="tabs" id="detTabs">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="files">Files</button>
+          <button class="tab" data-tab="psettings">Project Settings</button>
+        </div>
+
+        <section id="tabOverview" class="tabpane">
+          <div class="pane-col">
+            <h3>Description</h3>
+            <textarea id="detDesc" placeholder="What is this project about?" spellcheck="false"></textarea>
+          </div>
+          <div class="pane-col">
+            <h3>Notes & Comments</h3>
+            <div class="note-add">
+              <textarea id="noteInput" rows="2" placeholder="Add a note…  (Ctrl+Enter)" spellcheck="false"></textarea>
+              <button class="btn btn-primary" id="btnAddNote">Add</button>
+            </div>
+            <div id="noteList"></div>
+          </div>
+        </section>
+
+        <section id="tabFiles" class="tabpane" hidden>
+          <div class="files-toolbar">
+            <button class="btn" id="btnAddFiles">＋ Add Files</button>
+            <button class="btn" id="btnNewFolder">🗀 New Folder</button>
+            <button class="btn" id="btnSaveTpl">☰ Save structure as template</button>
+            <span class="muted small" id="dropTarget"></span>
+          </div>
+          <div id="fileTree" class="file-tree"></div>
+          <div class="drop-hint" id="dropHint">Drop files here to copy them into the project</div>
+        </section>
+
+        <section id="tabPsettings" class="tabpane" hidden>
+          <div class="settings-block">
+            <h3>Location</h3>
+            <div class="muted" id="psLocation"></div>
+          </div>
+          <div class="settings-block">
+            <h3>Accent color</h3>
+            <input type="color" id="psColor">
+          </div>
+          <div class="settings-block danger-zone">
+            <h3>Danger zone</h3>
+            <button class="btn" id="btnUnregister" hidden>Remove from library (keep files)</button>
+            <button class="btn btn-danger" id="btnDeleteProject">🗑 Delete project (Recycle Bin)</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="modalBackdrop" hidden><div id="modalBox"></div></div>
+
+  <script src="demo.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
