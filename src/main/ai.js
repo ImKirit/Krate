@@ -211,4 +211,38 @@ async function ask({ config, history, onActivity = () => { } }) {
   return askOpenAICompat({ baseUrl, apiKey: ai.apiKey, model, history, onActivity });
 }
 
-module.exports = { ask };
+// Minimal 1-request connection check with explicit settings (used by the
+// Settings "Test" button, before anything is saved).
+async function test({ provider, apiKey, model, baseUrl }) {
+  if (!apiKey) return { ok: false, error: 'No API key entered.' };
+  try {
+    if (provider === 'anthropic') {
+      const Anthropic = require('@anthropic-ai/sdk');
+      const client = new Anthropic({ apiKey });
+      const m = model || 'claude-opus-4-8';
+      const r = await client.messages.create({
+        model: m, max_tokens: 32,
+        messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
+      });
+      return { ok: true, model: r.model };
+    }
+    const base = provider === 'groq' ? 'https://api.groq.com/openai/v1' : (baseUrl || '');
+    if (!base) return { ok: false, error: 'No base URL entered.' };
+    const m = model || (provider === 'groq' ? 'llama-3.3-70b-versatile' : '');
+    if (!m) return { ok: false, error: 'No model entered.' };
+    const res = await fetch(base.replace(/\/+$/, '') + '/chat/completions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: m, max_tokens: 8, messages: [{ role: 'user', content: 'Reply with: ok' }] }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      return { ok: false, error: `${res.status} ${res.statusText}${body ? ' — ' + body.slice(0, 300) : ''}` };
+    }
+    return { ok: true, model: m };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err).slice(0, 400) };
+  }
+}
+
+module.exports = { ask, test };

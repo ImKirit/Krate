@@ -882,6 +882,12 @@ function openSettings() {
       <span style="font-size:13.5px">Duplicate finder (adds a scan button to Stats)</span>
     </div>
 
+    <label>Startup</label>
+    <div class="modal-row" style="gap:10px">
+      <input type="checkbox" id="setAutostart" ${cfg.autostart !== false ? 'checked' : ''} style="width:16px;height:16px">
+      <span style="font-size:13.5px">Start with Windows <span class="muted">(in the background, so the search hotkey always works)</span></span>
+    </div>
+
     <label>Watch folder</label>
     <div class="modal-row" style="gap:10px">
       <input type="checkbox" id="setWatch" ${cfg.watchEnabled ? 'checked' : ''} style="width:16px;height:16px">
@@ -909,8 +915,9 @@ function openSettings() {
       <div class="modal-row" style="margin-top:6px">
         <input type="text" id="setAiModel" value="${esc(cfg.aiApi.model || '')}" placeholder="Model (blank = default)" spellcheck="false">
         <input type="text" id="setAiBase" value="${esc(cfg.aiApi.baseUrl || '')}" placeholder="Base URL (custom only)" spellcheck="false">
+        <button class="btn" id="setAiTest">Test</button>
       </div>
-      <div class="hint">The agent can list, search and read your projects to answer questions. Keys are stored locally in config.json. Defaults: claude-opus-4-8 (Claude), llama-3.3-70b-versatile (Groq).</div>
+      <div class="hint" id="setAiTestOut">The agent can list, search and read your projects to answer questions. Keys are stored locally in config.json. Defaults: claude-opus-4-8 (Claude), llama-3.3-70b-versatile (Groq).</div>
     </div>
     <div id="setAiWebRows" hidden>
       <select id="setAi" style="margin-top:8px">
@@ -1196,12 +1203,33 @@ function openSettings() {
   aiModeSel.onchange = syncAiRows;
   syncAiRows();
 
+  // connection check with the values currently in the fields (pre-save)
+  box.querySelector('#setAiTest').onclick = async () => {
+    const out = box.querySelector('#setAiTestOut');
+    out.style.color = '';
+    out.textContent = window.T('Testing connection…');
+    const r = await window.krate.aiTest({
+      provider: box.querySelector('#setAiApiProvider').value,
+      apiKey: box.querySelector('#setAiKey').value.trim(),
+      model: box.querySelector('#setAiModel').value.trim(),
+      baseUrl: box.querySelector('#setAiBase').value.trim(),
+    });
+    if (r.ok) {
+      out.style.color = 'var(--dot-ok, #1fa855)';
+      out.textContent = `${window.T('Connection works')} (${r.model}). ${window.T('Remember to hit Save & Close.')}`;
+    } else {
+      out.style.color = 'var(--danger)';
+      out.textContent = r.error;
+    }
+  };
+
   box.querySelector('#setDone').onclick = async () => {
     if (removedSrcs.length) await window.krate.tplDeleteFiles({ srcs: removedSrcs });
     const r = await window.krate.saveConfig({
       tags, templates,
       thumbnails: box.querySelector('#setThumbs').checked,
       dupFinder: box.querySelector('#setDup').checked,
+      autostart: box.querySelector('#setAutostart').checked,
       watchEnabled: box.querySelector('#setWatch').checked,
       watchPath: box.querySelector('#setWatchPath').value || null,
       aiMode: aiModeSel.value,
@@ -1574,26 +1602,216 @@ window.krate.on('watch-file', ({ path: absPath, name }) => {
 });
 
 /* ---------------------------------------------------------- first run --- */
-function openWelcome() {
-  const box = openModal(`
-    <h2>Welcome to Krate 👋</h2>
-    <p class="muted" style="line-height:1.6">
-      Krate keeps every project — edits, apps, designs, anything — in one organized place:
-      tagged, searchable and one hotkey away.<br><br>
-      First, choose the folder where new projects will be stored by default.
-    </p>
-    <div class="modal-actions">
-      <button class="btn btn-primary" id="wPick"><span class="ico" data-icon="folder"></span> Choose projects folder</button>
-    </div>
-  `);
-  box.querySelector('#wPick').onclick = async () => {
-    const dir = await window.krate.pickFolder();
-    if (!dir) return;
-    const r = await window.krate.saveConfig({ projectsRoot: dir });
-    state.config = r.config;
-    closeModal();
-    refresh();
+/* ----------------------------------------------------- first-run wizard --- */
+// Multi-step setup: folder (+ adopt existing), look, AI, extras, quick tour.
+// The wizard itself always starts in the light theme; the user picks theirs
+// in the Look step and it applies live.
+function openWizard() {
+  const w = {
+    dir: state.config.projectsRoot || null,
+    adopt: true,
+    theme: 'light',
+    accent: null,
+    aiChoice: 'skip', aiProvider: 'anthropic', aiKey: '', aiModel: '',
+    watch: false, autostart: true,
   };
+  applyLook({ theme: 'light', accentColor: null });
+  let step = 0;
+
+  const dots = () => `<div class="wiz-dots">${[0, 1, 2, 3, 4, 5].map((i) =>
+    `<span class="wiz-dot ${i === step ? 'on' : ''}"></span>`).join('')}</div>`;
+  const foot = (nextLabel = 'Next', nextOk = true) => `
+    <div class="modal-actions" style="justify-content:space-between">
+      <button class="btn btn-ghost" id="wBack" ${step === 0 ? 'style="visibility:hidden"' : ''}>Back</button>
+      ${dots()}
+      <button class="btn btn-primary" id="wNext" ${nextOk ? '' : 'disabled'} style="margin-left:0">${nextLabel}</button>
+    </div>`;
+
+  const steps = [
+    // 0 — welcome
+    () => `
+      <div class="wiz-hero"><span class="wiz-mark">K</span></div>
+      <h2 style="text-align:center">Hey ${esc(window.krate.username || 'there')}, welcome to Krate</h2>
+      <p class="muted" style="line-height:1.6;text-align:center">
+        Every project — edits, apps, designs, anything — in one organized place:
+        tagged, searchable and one hotkey away.<br>Let's set things up. Takes about a minute.
+      </p>
+      ${foot('Get started')}`,
+
+    // 1 — projects folder
+    () => `
+      <h2>Where do your projects live?</h2>
+      <p class="muted" style="line-height:1.6">New projects are created here by default. You can pick a different place per project later.</p>
+      <div class="modal-row" style="margin-top:12px">
+        <input type="text" id="wDir" value="${esc(w.dir || '')}" readonly placeholder="No folder chosen yet">
+        <button class="btn" id="wPick"><span class="ico" data-icon="folder"></span> Browse</button>
+      </div>
+      <div class="modal-row" style="gap:10px;margin-top:12px">
+        <input type="checkbox" id="wAdopt" ${w.adopt ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--accent)">
+        <span style="font-size:13.5px">Treat folders already inside as projects <span class="muted">(adds a krate.json to each)</span></span>
+      </div>
+      ${foot('Next', !!w.dir)}`,
+
+    // 2 — look
+    () => `
+      <h2>Pick your look</h2>
+      <p class="muted">Applies instantly. You can change it any time in Settings.</p>
+      <div class="wiz-themes">
+        <div class="wtheme ${w.theme === 'light' ? 'on' : ''}" data-t="light">
+          <div class="wt-prev" style="background:#f4f4f1;border-color:#dcdcd3"><i style="background:#15151a"></i><b style="background:#ffffff;border-color:#dcdcd3"></b></div>
+          <span>Light</span>
+        </div>
+        <div class="wtheme ${w.theme === 'dark' ? 'on' : ''}" data-t="dark">
+          <div class="wt-prev" style="background:#0d0d0d;border-color:#2b2b2b"><i style="background:#f2f2f2"></i><b style="background:#191919;border-color:#2b2b2b"></b></div>
+          <span>Dark</span>
+        </div>
+        <div class="wtheme ${w.theme === 'purple' ? 'on' : ''}" data-t="purple">
+          <div class="wt-prev" style="background:#0b0a10;border-color:#262130"><i style="background:#a855f7"></i><b style="background:#16131f;border-color:#262130"></b></div>
+          <span>Purple</span>
+        </div>
+      </div>
+      <div class="modal-row" style="margin-top:14px;gap:10px">
+        <span class="muted small">Custom accent (optional)</span>
+        <input type="color" id="wAccent" value="${w.accent || '#15151a'}">
+        <button class="btn btn-ghost" id="wAccentReset">Reset</button>
+      </div>
+      ${foot()}`,
+
+    // 3 — AI
+    () => `
+      <h2>AI assistant</h2>
+      <p class="muted" style="line-height:1.6">Optional. The built-in agent can list, search and read your projects to answer questions.</p>
+      <select id="wAiChoice" style="margin-top:10px;width:100%">
+        <option value="skip" ${w.aiChoice === 'skip' ? 'selected' : ''}>Skip for now</option>
+        <option value="api" ${w.aiChoice === 'api' ? 'selected' : ''}>Built-in agent (API key)</option>
+        <option value="web" ${w.aiChoice === 'web' ? 'selected' : ''}>Embedded website (sign in with account)</option>
+      </select>
+      <div id="wAiRows" ${w.aiChoice !== 'api' ? 'hidden' : ''}>
+        <div class="modal-row" style="margin-top:10px">
+          <select id="wAiProvider" style="flex:0 0 140px">
+            <option value="anthropic" ${w.aiProvider === 'anthropic' ? 'selected' : ''}>Claude (API)</option>
+            <option value="groq" ${w.aiProvider === 'groq' ? 'selected' : ''}>Groq</option>
+          </select>
+          <input type="password" id="wAiKey" value="${esc(w.aiKey)}" placeholder="API key" spellcheck="false">
+          <button class="btn" id="wAiTest">Test</button>
+        </div>
+        <div class="hint" id="wAiOut">The key is stored locally, in config.json on this PC.</div>
+      </div>
+      ${foot()}`,
+
+    // 4 — extras
+    () => `
+      <h2>Two more things</h2>
+      <div class="modal-row" style="gap:10px;margin-top:14px">
+        <input type="checkbox" id="wAuto" ${w.autostart ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--accent)">
+        <span style="font-size:13.5px">Start Krate with Windows <span class="muted">(in the background, so the search hotkey always works)</span></span>
+      </div>
+      <div class="modal-row" style="gap:10px;margin-top:12px">
+        <input type="checkbox" id="wWatch" ${w.watch ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--accent)">
+        <span style="font-size:13.5px">Watch my Downloads folder <span class="muted">(offers to sort new files into a project)</span></span>
+      </div>
+      ${foot()}`,
+
+    // 5 — tour
+    () => `
+      <h2>You're set. The 20-second tour:</h2>
+      <div class="wiz-list">
+        <div>${window.KI.get('search')} <span><b>Ctrl+Alt+K</b> anywhere in Windows: search every project, file and nickname. Drag results into any app.</span></div>
+        <div>${window.KI.get('plus')} <span><b>New Project</b> creates a folder from a template — structure and starter files included.</span></div>
+        <div>${window.KI.get('pencil')} <span>Give files <b>nicknames</b> ("main clip") in the Files tab so you find them without knowing the real name.</span></div>
+        <div>${window.KI.get('graph')} <span><b>Graph View</b> shows your whole library as a map. Click a node to jump there.</span></div>
+        <div>${window.KI.get('bot')} <span>The <b>AI panel</b> answers questions like "where is the render of my last edit?"</span></div>
+      </div>
+      ${foot('Finish')}`,
+  ];
+
+  const render = () => {
+    const box = openModal(steps[step]());
+    injectIcons(box);
+
+    box.querySelector('#wBack').onclick = () => { step = Math.max(0, step - 1); render(); };
+    box.querySelector('#wNext').onclick = async () => {
+      if (step === steps.length - 1) { await finish(); return; }
+      step++;
+      render();
+    };
+
+    if (step === 1) {
+      box.querySelector('#wPick').onclick = async () => {
+        const dir = await window.krate.pickFolder();
+        if (!dir) return;
+        w.dir = dir;
+        render();
+      };
+      box.querySelector('#wAdopt').onchange = (e) => { w.adopt = e.target.checked; };
+    }
+
+    if (step === 2) {
+      box.querySelectorAll('.wtheme').forEach((el) => {
+        el.onclick = () => {
+          w.theme = el.dataset.t;
+          applyLook({ theme: w.theme, accentColor: w.accent });
+          render();
+        };
+      });
+      box.querySelector('#wAccent').oninput = (e) => {
+        w.accent = e.target.value;
+        applyLook({ theme: w.theme, accentColor: w.accent });
+      };
+      box.querySelector('#wAccentReset').onclick = () => {
+        w.accent = null;
+        applyLook({ theme: w.theme, accentColor: null });
+      };
+    }
+
+    if (step === 3) {
+      const choice = box.querySelector('#wAiChoice');
+      choice.onchange = () => { w.aiChoice = choice.value; box.querySelector('#wAiRows').hidden = choice.value !== 'api'; };
+      const prov = box.querySelector('#wAiProvider');
+      prov.onchange = () => { w.aiProvider = prov.value; };
+      box.querySelector('#wAiKey').oninput = (e) => { w.aiKey = e.target.value; };
+      box.querySelector('#wAiTest').onclick = async () => {
+        const out = box.querySelector('#wAiOut');
+        out.style.color = '';
+        out.textContent = 'Testing…';
+        const r = await window.krate.aiTest({ provider: w.aiProvider, apiKey: w.aiKey.trim(), model: '', baseUrl: '' });
+        out.style.color = r.ok ? '#1fa855' : 'var(--danger)';
+        out.textContent = r.ok ? `Connection works (${r.model}).` : r.error;
+      };
+    }
+
+    if (step === 4) {
+      box.querySelector('#wAuto').onchange = (e) => { w.autostart = e.target.checked; };
+      box.querySelector('#wWatch').onchange = (e) => { w.watch = e.target.checked; };
+    }
+  };
+
+  const finish = async () => {
+    const partial = {
+      projectsRoot: w.dir,
+      theme: w.theme,
+      accentColor: w.accent,
+      autostart: w.autostart,
+      watchEnabled: w.watch,
+      onboarded: true,
+    };
+    if (w.aiChoice === 'api') {
+      partial.aiMode = 'api';
+      partial.aiApi = { provider: w.aiProvider, apiKey: w.aiKey.trim(), model: '', baseUrl: '' };
+    } else if (w.aiChoice === 'web') {
+      partial.aiMode = 'web';
+    }
+    const r = await window.krate.saveConfig(partial);
+    state.config = r.config;
+    if (w.adopt) {
+      const n = await window.krate.adoptExisting();
+      if (n) toast(`${n} ${window.T('existing folders added as projects')}`);
+    }
+    closeModal();
+    await refresh();
+  };
+
+  render();
 }
 
 /* -------------------------------------------------------------- boot ---- */
@@ -1603,8 +1821,52 @@ window.krate.on('goto-project', ({ path, rel }) => {
 
 window.addEventListener('focus', () => { if (!state.current) refresh(); });
 
+/* ------------------------------------------------------ panel resizers --- */
+// Sidebar and AI panel widths are draggable; sizes persist per machine.
+function initResizers() {
+  const defs = [
+    { grip: 'rszSidebar', panel: 'sidebar', key: 'krate.w.sidebar', min: 176, max: 360, dir: 1, def: 236 },
+    { grip: 'rszAi', panel: 'aiPanel', key: 'krate.w.ai', min: 300, max: 680, dir: -1, def: 400 },
+  ];
+  for (const d of defs) {
+    const grip = $(d.grip);
+    const panel = $(d.panel);
+    if (!grip || !panel) continue;
+    const saved = +localStorage.getItem(d.key);
+    if (saved) panel.style.width = Math.min(d.max, Math.max(d.min, saved)) + 'px';
+
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      grip.classList.add('dragging');
+      document.body.classList.add('resizing');
+      const startX = e.clientX;
+      const startW = panel.getBoundingClientRect().width;
+      const move = (ev) => {
+        const w = Math.min(d.max, Math.max(d.min, startW + (ev.clientX - startX) * d.dir));
+        panel.style.width = w + 'px';
+        if (!$('graphView').hidden) window.KGraph.start(); // keep canvas in sync
+      };
+      const up = () => {
+        grip.classList.remove('dragging');
+        document.body.classList.remove('resizing');
+        localStorage.setItem(d.key, Math.round(panel.getBoundingClientRect().width));
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', up);
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up);
+    });
+    grip.addEventListener('dblclick', () => {
+      panel.style.width = d.def + 'px';
+      localStorage.removeItem(d.key);
+    });
+  }
+}
+
 (async function boot() {
   injectIcons();
+  initResizers();
   await refresh();
-  if (!state.config.projectsRoot) openWelcome();
+  if (!state.config.onboarded || !state.config.projectsRoot) openWizard();
 })();

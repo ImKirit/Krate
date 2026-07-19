@@ -10,6 +10,8 @@ if (!window.krate) {
     projectsRoot: 'D:\\Projects',
     externalProjects: [],
     hotkey: 'Control+Alt+K',
+    onboarded: true,
+    autostart: true,
     animations: true,
     theme: 'light',
     accentColor: null,
@@ -195,6 +197,10 @@ if (!window.krate) {
     startDrag: () => { }, pathForFile: () => '',
     openExternal: async () => { },
     aiOpen: async () => ({ copied: true }),
+    aiTest: async () => ({ ok: true, model: 'demo' }),
+    adoptExisting: async () => 0,
+    username: 'you',
+    demo: true,
     aiAsk: async ({ history }) => {
       await new Promise((r) => setTimeout(r, 400));
       const q = history[history.length - 1]?.content || '';

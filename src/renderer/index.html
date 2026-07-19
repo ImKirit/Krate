@@ -7,8 +7,10 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body data-theme="light">
+  <div id="bootScreen"><pre id="bootText"></pre></div>
   <div id="app">
     <aside id="sidebar">
+      <div class="rsz rsz-right" id="rszSidebar" title="Drag to resize, double-click to reset"></div>
       <div class="logo">
         <span class="logo-mark">K</span>
         <span class="logo-text">KRATE</span>
@@ -166,6 +168,7 @@
 
     <!-- ========================== AI PANEL ============================= -->
     <aside id="aiPanel" hidden>
+      <div class="rsz rsz-left" id="rszAi" title="Drag to resize, double-click to reset"></div>
       <div class="ai-head">
         <span class="ico" data-icon="sparkle"></span>
         <span data-i18n="AI Assistant">AI Assistant</span>
@@ -189,5 +192,6 @@
   <script src="demo.js"></script>
   <script src="graph.js"></script>
   <script src="app.js"></script>
+  <script src="boot.js"></script>
 </body>
 </html>

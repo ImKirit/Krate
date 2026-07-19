@@ -23,6 +23,14 @@ let overlayWin = null;
 let tray = null;
 let isQuitting = false;
 const SMOKE = process.argv.includes('--smoke');
+const HIDDEN_START = process.argv.includes('--hidden');
+
+// Smoke tests run against a throwaway profile so they never collide with a
+// running Krate instance (single-instance lock is per userData path) and
+// never touch the real config.
+if (SMOKE) {
+  app.setPath('userData', require('fs').mkdtempSync(path.join(require('os').tmpdir(), 'krate-smoke-')));
+}
 const ICON = path.join(__dirname, '..', '..', 'build', 'icon.png');
 
 // ---------------------------------------------------------------- windows --
@@ -30,7 +38,8 @@ const THEME_BG = { light: '#f4f4f1', dark: '#0d0d0d', purple: '#0b0a10' };
 
 function createMainWindow() {
   mainWin = new BrowserWindow({
-    width: 1280, height: 840, minWidth: 960, minHeight: 620,
+    width: 1280, height: 840, minWidth: 860, minHeight: 560,
+    show: !HIDDEN_START,
     backgroundColor: THEME_BG[store.getConfig().theme] || THEME_BG.light,
     icon: ICON,
     title: 'Krate',
@@ -169,6 +178,17 @@ function openAiWindow(provider) {
   aiWin.loadURL(url, { userAgent: CHROME_UA });
 }
 
+// -------------------------------------------------------------- autostart --
+// Launches Krate in the background on login (tray + hotkey only). Only
+// meaningful in the packaged app; in dev it would register electron.exe.
+function applyAutostart() {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({
+    openAtLogin: store.getConfig().autostart !== false,
+    args: ['--hidden'],
+  });
+}
+
 // ----------------------------------------------------------- krate:// urls --
 const slugify = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
@@ -248,8 +268,11 @@ function wireIpc() {
       if (!hotkeyResult.ok) { store.saveConfig({ hotkey: before }); registerHotkey(before); }
     }
     if (partial.watchEnabled !== undefined || partial.watchPath !== undefined) startWatcher();
+    if (partial.autostart !== undefined) applyAutostart();
     return { config: store.getConfig(), hotkey: hotkeyResult };
   });
+
+  ipcMain.handle('projects:adoptExisting', () => store.adoptExisting());
 
   ipcMain.handle('dialog:pickFolder', async () => {
     const r = await dialog.showOpenDialog(mainWin, { properties: ['openDirectory', 'createDirectory'] });
@@ -385,6 +408,7 @@ function wireIpc() {
   });
 
   ipcMain.handle('ai:context', (e, { path: p }) => store.buildContext(p));
+  ipcMain.handle('ai:test', (e, opts) => ai.test(opts || {}));
 
   ipcMain.handle('search:query', (e, q) => indexer.search(q));
   ipcMain.handle('overlay:browse', (e, { projectPath, rel }) => store.listDir(projectPath, rel));
@@ -419,6 +443,7 @@ if (!gotLock) {
     createTray();
     registerHotkey(store.getConfig().hotkey);
     startWatcher();
+    applyAutostart();
 
     // krate://<project-title-slug> links open the project directly
     app.setAsDefaultProtocolClient('krate');

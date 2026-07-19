@@ -45,6 +45,8 @@ const DEFAULT_CONFIG = {
   tags: DEFAULT_TAGS,
   templates: DEFAULT_TEMPLATES,
   animations: true,
+  autostart: true,
+  onboarded: false,
   // look & feel: 'light' (white, black accents), 'dark' (black, white accents),
   // 'purple' (the original Krate look). accentColor overrides the theme accent.
   theme: 'light',
@@ -328,6 +330,32 @@ async function structureOf(projectPath) {
   return dirs;
 }
 
+// -------------------------------------------------------- adopt existing ---
+// Turns every subfolder of projectsRoot that has no krate.json yet into a
+// project (title = folder name). Used by the first-run wizard.
+async function adoptExisting() {
+  if (!config.projectsRoot) return 0;
+  let adopted = 0;
+  const entries = await fsp.readdir(config.projectsRoot, { withFileTypes: true }).catch(() => []);
+  for (const e of entries) {
+    if (!e.isDirectory() || IGNORED_DIRS.has(e.name) || e.name.startsWith('.')) continue;
+    const dir = path.join(config.projectsRoot, e.name);
+    if (fs.existsSync(path.join(dir, 'krate.json'))) continue;
+    const now = new Date().toISOString();
+    try {
+      await writeMeta(dir, {
+        id: crypto.randomUUID(), title: e.name, description: '',
+        tags: [], status: 'active', cover: null, color: '#a855f7',
+        favorite: false, notes: [], links: [], related: [], nicknames: {},
+        created: now, modified: now,
+      });
+      adopted++;
+    } catch { /* unwritable — skip */ }
+  }
+  version++;
+  return adopted;
+}
+
 // ---------------------------------------------------------------- trash ---
 // Krate-level trash: deleted projects are moved to userData/trash/ and can be
 // restored from the Trash view. "Delete forever" sends them to the OS bin.
@@ -553,6 +581,7 @@ module.exports = {
   readMeta, writeMeta, readTree, listDir,
   importPaths, newFolder, setCoverFromFile, structureOf,
   importTemplateFiles, deleteTemplateFiles,
+  adoptExisting,
   trashProject, listTrash, restoreProject, purgeTrashEntry,
   findDuplicates, libraryStats,
   toRel, sanitizeName,
