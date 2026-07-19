@@ -6,3 +6,4 @@ Thumbs.db
 dist2/
 krate.json
 .krate/
+release/

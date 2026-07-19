@@ -178,6 +178,33 @@ function openAiWindow(provider) {
   aiWin.loadURL(url, { userAgent: CHROME_UA });
 }
 
+// ------------------------------------------------------------ auto-update --
+// Checks GitHub Releases in the background. Downloads happen silently; when
+// an update is ready the user picks "restart now" or it installs on quit.
+function initAutoUpdate() {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try { ({ autoUpdater } = require('electron-updater')); } catch { return; }
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('error', () => { /* offline or repo not reachable: try again next start */ });
+  autoUpdater.on('update-downloaded', async (info) => {
+    if (tray) tray.setToolTip(`Krate (update ${info.version} ready)`);
+    const r = await dialog.showMessageBox({
+      type: 'info',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0, cancelId: 1,
+      title: 'Krate update',
+      message: `Krate ${info.version} is ready.`,
+      detail: 'Restart to apply it now, or it installs the next time you quit Krate.',
+    });
+    if (r.response === 0) { isQuitting = true; autoUpdater.quitAndInstall(); }
+  });
+  autoUpdater.checkForUpdates().catch(() => { });
+  // re-check every 6 hours while running in the tray
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => { }), 6 * 60 * 60 * 1000);
+}
+
 // -------------------------------------------------------------- autostart --
 // Launches Krate in the background on login (tray + hotkey only). Only
 // meaningful in the packaged app; in dev it would register electron.exe.
@@ -444,6 +471,7 @@ if (!gotLock) {
     registerHotkey(store.getConfig().hotkey);
     startWatcher();
     applyAutostart();
+    initAutoUpdate();
 
     // krate://<project-title-slug> links open the project directly
     app.setAsDefaultProtocolClient('krate');

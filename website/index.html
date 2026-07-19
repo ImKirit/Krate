@@ -72,6 +72,27 @@
     .logo-mark:hover { transform: rotate(-8deg) scale(1.1); }
     img.logo-mark { object-fit: cover; border: 2px solid var(--border); background: none; }
     .logo-text { font-weight: 800; letter-spacing: 3px; font-size: 16px; }
+    .logo-home { display: flex; align-items: center; gap: 12px; color: var(--text); cursor: pointer; }
+
+    /* lightbox: click a screenshot to view it large on a dark blurred backdrop */
+    .shot img { cursor: zoom-in; }
+    #lightbox {
+      position: fixed; inset: 0; z-index: 60;
+      display: grid; place-items: center; padding: 4vh 4vw;
+      background: rgba(10, 10, 12, 0.72);
+      backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+      opacity: 0; pointer-events: none; cursor: zoom-out;
+      transition: opacity 0.22s ease;
+    }
+    #lightbox.open { opacity: 1; pointer-events: auto; }
+    #lightbox img {
+      max-width: 100%; max-height: 100%;
+      border-radius: 12px; border: 2px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+      transform: scale(0.94);
+      transition: transform 0.22s var(--spring);
+    }
+    #lightbox.open img { transform: scale(1); }
     .nav-links { margin-left: auto; display: flex; gap: 24px; font-size: 14px; font-weight: 600; }
     .nav-links a { color: var(--muted); position: relative; padding: 2px 0; transition: color 0.15s; }
     .nav-links a::after {
@@ -263,8 +284,10 @@
 
 <nav>
   <div class="nav-inner">
-    <img class="logo-mark" src="img/icon.png" alt="Krate">
-    <div class="logo-text">KRATE</div>
+    <a class="logo-home" href="#" aria-label="Back to top">
+      <img class="logo-mark" src="img/icon.png" alt="Krate">
+      <span class="logo-text">KRATE</span>
+    </a>
     <div class="nav-links">
       <a href="#features">Features</a>
       <a href="#search">Quick Search</a>
@@ -442,8 +465,11 @@ MyProject/
 <footer>
   <div class="logo-line"><img class="logo-mark" src="img/icon.png" alt="Krate"><div class="logo-text">KRATE</div></div>
   MIT licensed · made by <a href="https://imkirit.dev" target="_blank" rel="noopener">ImKirit</a> ·
-  <a href="https://github.com/ImKirit/Krate" target="_blank" rel="noopener">source on GitHub</a>
+  <a href="https://github.com/ImKirit/Krate" target="_blank" rel="noopener">source on GitHub</a> ·
+  <a href="https://imkirit.dev/impressum" target="_blank" rel="noopener">Impressum</a>
 </footer>
+
+<div id="lightbox" aria-hidden="true"><img src="" alt=""></div>
 
 <script>
   // scroll reveal with sibling stagger
@@ -462,6 +488,30 @@ MyProject/
     }
   }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
   document.querySelectorAll('.rv').forEach((el) => io.observe(el));
+
+  // logo scrolls back to the top
+  document.querySelector('.logo-home').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // lightbox for screenshots
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = lightbox.querySelector('img');
+  document.querySelectorAll('.shot img').forEach((img) => {
+    img.addEventListener('click', () => {
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt || '';
+      lightbox.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    });
+  });
+  const closeLightbox = () => {
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+  };
+  lightbox.addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
 
   // site theme switcher (the cards in the "Three looks" section)
   const themeCards = document.querySelectorAll('.theme-card');

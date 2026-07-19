@@ -39,7 +39,9 @@
     "protocols": [
       {
         "name": "Krate Project Link",
-        "schemes": ["krate"]
+        "schemes": [
+          "krate"
+        ]
       }
     ],
     "nsis": {
@@ -48,9 +50,17 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "shortcutName": "Krate"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ImKirit",
+        "repo": "Krate"
+      }
+    ]
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.112.3"
+    "@anthropic-ai/sdk": "^0.112.3",
+    "electron-updater": "^6.8.9"
   }
 }
