@@ -1382,7 +1382,7 @@ async function buildGraph(scopePath) {
     return files;
   };
 
-  loadBar.start(window.T('Loading graph'));
+  loadBar.start();
 
   if (!scopePath) {
     // whole library: every project with its complete folder and file
@@ -1407,7 +1407,8 @@ async function buildGraph(scopePath) {
       }
       const { meta, tree } = await window.krate.loadProject(p.path);
       addTree(tree, 'p:' + p.path, meta, p.path, `f:${p.path}:`, { left: perProject });
-      loadBar.set(++done, state.projects.length, window.T('projects'));
+      // fetching the trees is the first 30% of the bar
+      loadBar.progress(0.3 * (++done / state.projects.length));
     }
     for (const t of usedTags) {
       const cfg = state.config.tags.find((x) => x.name === t);
@@ -1445,7 +1446,8 @@ async function buildGraph(scopePath) {
   window.KGraph.setData({ nodes, edges }, {
     pins,
     incremental: true,
-    onProgress: (rev, tot) => loadBar.set(rev, tot),
+    // revealing the nodes is the remaining 70%; the graph itself shows progress
+    onProgress: (rev, tot) => loadBar.progress(0.3 + 0.7 * (rev / Math.max(1, tot))),
     onDone: () => loadBar.done(),
     onPin: (map) => {
       try { localStorage.setItem(pinKey, JSON.stringify(map)); } catch { }
@@ -1458,6 +1460,8 @@ async function buildGraph(scopePath) {
       else if (n.type === 'folder') window.krate.reveal(n.abs);
     },
   });
+  // tag visibility persists across graph opens
+  window.KGraph.setTypeHidden('tag', localStorage.getItem('krate.graph.hideTags') === '1');
   window.KGraph.start();
 }
 
@@ -1469,10 +1473,18 @@ function syncGraphHud() {
   const mode = window.KGraph.getLabelMode();
   const names = { on: 'Labels: on', dim: 'Labels: faint', off: 'Labels: off' };
   $('graphLabelsState').textContent = names[mode] || 'Labels';
+  const hidden = localStorage.getItem('krate.graph.hideTags') === '1';
+  $('graphTagsState').textContent = hidden ? 'Tags: off' : 'Tags: on';
 }
 $('btnGraphLabels').onclick = () => {
   const next = { on: 'dim', dim: 'off', off: 'on' };
   window.KGraph.setLabelMode(next[window.KGraph.getLabelMode()] || 'on');
+  syncGraphHud();
+};
+$('btnGraphTags').onclick = () => {
+  const hide = !(localStorage.getItem('krate.graph.hideTags') === '1');
+  localStorage.setItem('krate.graph.hideTags', hide ? '1' : '0');
+  window.KGraph.setTypeHidden('tag', hide);
   syncGraphHud();
 };
 $('btnGraphUnpin').onclick = () => window.KGraph.unpinAll();
@@ -1962,28 +1974,33 @@ function initResizers() {
 }
 
 /* ------------------------------------------------------- top load bar --- */
-// loadBar.start('Loading graph') -> .set(done, total, 'projects') -> .done()
+// A thin, determinate bar with a moving shine. No numbers: the graph builds up
+// piece by piece, which is the visible progress. loadBar.start() ->
+// loadBar.progress(0..1) -> loadBar.done().
 const loadBar = {
-  _t: null,
-  start(label) {
+  _t: null, _cur: 0,
+  start() {
     clearTimeout(this._t);
     const el = $('loadBar');
     el.hidden = false;
     el.classList.remove('fade');
-    $('loadBarFill').style.width = '3%';
-    $('loadBarText').textContent = label || '';
+    el.classList.add('working');
+    this._cur = 0;
+    $('loadBarFill').style.width = '4%';
   },
-  set(done, total, noun) {
-    const pct = total ? Math.max(3, Math.round((done / total) * 100)) : 30;
+  progress(frac) {
+    // only move forward, so the bar never jumps backwards between phases
+    const pct = Math.max(4, Math.min(100, Math.round(frac * 100)));
+    if (pct <= this._cur) return;
+    this._cur = pct;
     $('loadBarFill').style.width = pct + '%';
-    $('loadBarText').textContent = total > 1
-      ? `${done} / ${total}${noun ? ' ' + noun : ''}` : $('loadBarText').textContent;
   },
   done() {
-    $('loadBarFill').style.width = '100%';
     const el = $('loadBar');
+    el.classList.remove('working');
+    $('loadBarFill').style.width = '100%';
     el.classList.add('fade');
-    this._t = setTimeout(() => { el.hidden = true; el.classList.remove('fade'); }, 350);
+    this._t = setTimeout(() => { el.hidden = true; el.classList.remove('fade'); }, 400);
   },
 };
 

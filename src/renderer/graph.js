@@ -16,6 +16,8 @@
   let onClick = null;
   let onPin = null;
   let labelMode = localStorage.getItem('krate.graph.labels') || 'on';
+  const hiddenTypes = new Set(); // node types hidden from view + physics (e.g. 'tag')
+  const isHidden = (n) => hiddenTypes.has(n.type);
 
   // camera
   let cam = { x: 0, y: 0, z: 1 };
@@ -181,6 +183,7 @@
 
     const grid = new Map();
     for (const n of nodes) {
+      if (isHidden(n)) continue;
       const key = ((n.x / CELL) | 0) + ':' + ((n.y / CELL) | 0);
       let cell = grid.get(key);
       if (!cell) { cell = []; grid.set(key, cell); }
@@ -188,6 +191,7 @@
     }
 
     for (const n of nodes) {
+      if (isHidden(n)) continue;
       const cx = (n.x / CELL) | 0, cy = (n.y / CELL) | 0;
       for (let gx = cx - 1; gx <= cx + 1; gx++) {
         for (let gy = cy - 1; gy <= cy + 1; gy++) {
@@ -210,6 +214,7 @@
 
     for (const e of edges) {
       const a = byId.get(e.a), b = byId.get(e.b);
+      if (isHidden(a) || isHidden(b)) continue;
       const dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.max(1, Math.hypot(dx, dy));
       const f = (d - springLen) * springK * alpha;
@@ -219,7 +224,7 @@
     }
 
     for (const n of nodes) {
-      if (n === dragNode || n.pinned) { n.vx = 0; n.vy = 0; continue; }
+      if (n === dragNode || n.pinned || isHidden(n)) { n.vx = 0; n.vy = 0; continue; }
       const g = gravity * (n.g || 1) * alpha;
       n.vx -= n.x * g;
       n.vy -= n.y * g;
@@ -281,6 +286,7 @@
     // edges
     for (const e of edges) {
       const a = byId.get(e.a), b = byId.get(e.b);
+      if (isHidden(a) || isHidden(b)) continue;
       const lit = reach && reach.has(a.id) && reach.has(b.id);
       ctx.lineWidth = ((e.kind === 'related' ? 2 : 1) + (lit ? 0.8 : 0)) / cam.z;
       ctx.strokeStyle = lit ? th.edgeHover : th.edge;
@@ -296,6 +302,7 @@
 
     // nodes: flat fills; files always get an outline so white stays visible
     for (const n of nodes) {
+      if (isHidden(n)) continue;
       const r = n.r || 6;
       const isHover = n === hover;
       ctx.globalAlpha = reach && !reach.has(n.id) ? 0.2 : 1;
@@ -326,6 +333,7 @@
     ctx.textAlign = 'center';
     ctx.font = `600 ${11 / cam.z}px "Segoe UI"`;
     for (const n of nodes) {
+      if (isHidden(n)) continue;
       const isHover = n === hover;
       if (!isHover) {
         if (smallType(n)) {
@@ -411,6 +419,7 @@
   function hitTest(wx, wy) {
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i];
+      if (isHidden(n)) continue;
       const r = (n.r || 6) + 4;
       if ((n.x - wx) ** 2 + (n.y - wy) ** 2 < r * r) return n;
     }
@@ -496,6 +505,14 @@
       localStorage.setItem('krate.graph.labels', labelMode);
     },
     getLabelMode() { return labelMode; },
+    // show/hide all nodes of a type (and edges touching them), e.g. 'tag'
+    setTypeHidden(type, hidden) {
+      if (hidden) hiddenTypes.add(type); else hiddenTypes.delete(type);
+      adjCache = null; treeAdjCache = null;
+      hover = null; reach = null;
+      alpha = Math.max(alpha, 0.5); // let the rest settle into the freed space
+    },
+    isTypeHidden(type) { return hiddenTypes.has(type); },
     unpinAll() {
       for (const n of nodes) n.pinned = false;
       savePins();

@@ -482,26 +482,34 @@ body.has-update #app { height: calc(100vh - 40px); }
 body.has-update, body.has-update #app { }
 
 /* ---------------- top load bar ----------------
-   Reused whenever something takes a moment to load (graph, stats). Shows a
-   filling bar plus a short "x of y" label, then fades out. */
+   A slim determinate bar with a soft track and a moving shine on the filled
+   part. No numbers: the thing being loaded (the graph) shows its own progress
+   as it builds up. Fades out when done. */
 #loadBar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 120;
-  height: 3px; background: transparent;
-  transition: opacity 0.3s ease;
+  height: 4px;
+  background: var(--accent-soft);
+  transition: opacity 0.35s ease;
 }
 body.has-update #loadBar { top: 40px; }
 #loadBar i {
-  display: block; height: 100%; width: 0;
+  position: relative; display: block; height: 100%; width: 0;
   background: var(--accent);
-  transition: width 0.2s ease;
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 10px var(--accent-soft);
+  transition: width 0.28s cubic-bezier(0.2, 0.9, 0.25, 1);
+  overflow: hidden;
 }
-#loadBar span {
-  position: absolute; top: 8px; right: 14px;
-  font-size: 11px; font-weight: 700; color: var(--muted);
-  background: var(--panel); border: 2px solid var(--border);
-  padding: 2px 9px; border-radius: 7px;
-  box-shadow: var(--shadow-1);
+/* a light band that keeps sweeping across the filled part while working */
+.lb-shine {
+  position: absolute; top: 0; bottom: 0; width: 90px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: translateX(-100%);
+  opacity: 0;
 }
+#loadBar.working .lb-shine { opacity: 1; animation: lbShine 1.05s linear infinite; }
+@keyframes lbShine { from { transform: translateX(-120px); } to { transform: translateX(360px); } }
+body[data-theme="light"] .lb-shine { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent); }
 #loadBar.fade { opacity: 0; }
 
 /* ---------------- what's new ---------------- */
