@@ -2040,12 +2040,36 @@ window.krate.on('update-ready', (info) => showUpdateBar(info));
 function showWhatsNew(info) {
   const cl = (window.KRATE_CHANGELOG || {})[info.to];
   if (!cl) return;
+
+  // one bullet, optionally with indented sub-bullets, tinted to its category
+  const bullet = (item, color) => {
+    const text = typeof item === 'string' ? item : item.text;
+    const sub = (typeof item === 'object' && item.sub) || [];
+    return `<div class="wn-item">
+        <span class="wn-dot" style="background:${color}"></span>
+        <div class="wn-body">
+          <div>${esc(text)}</div>
+          ${sub.length ? `<div class="wn-sub">${sub.map((s) =>
+            `<div><span class="wn-tick" style="border-color:${color}"></span><span>${esc(s)}</span></div>`).join('')}</div>` : ''}
+        </div>
+      </div>`;
+  };
+
+  let body;
+  if (cl.groups) {
+    body = cl.groups.map((g) => `
+      <div class="wn-group" style="--cat:${g.color}">
+        <div class="wn-cat"><span class="wn-cat-dot"></span>${esc(g.name)}</div>
+        ${g.items.map((it) => bullet(it, g.color)).join('')}
+      </div>`).join('');
+  } else {
+    body = `<div class="wn-group" style="--cat:#f5b301">${(cl.items || []).map((it) => bullet(it, '#f5b301')).join('')}</div>`;
+  }
+
   const box = openModal(`
     <div class="wn-hero"><img class="wn-mark" src="logo.png" alt=""></div>
     <h2 style="text-align:center;cursor:grab">${esc(cl.title)}</h2>
-    <div class="wn-list">
-      ${cl.items.map((t) => `<div><span class="wn-dot"></span><span>${esc(t)}</span></div>`).join('')}
-    </div>
+    <div class="wn-scroll">${body}</div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="wnDone" style="margin-left:0">${window.T('Got it')}</button>
     </div>`);

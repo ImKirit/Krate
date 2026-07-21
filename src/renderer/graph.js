@@ -33,15 +33,24 @@
   let pins = {};
   let onProgress = null, onDone = null, totalCount = 0;
 
+  // remember how many children each parent has already spawned so a big folder
+  // fans its files out on a growing spiral instead of piling them on one ring
+  const spawnCount = new Map();
+
   function seedPos(n) {
     // place a new node near its already-revealed parent so the graph grows
     // outward instead of exploding from the center
     const p = childrenOf.parent && childrenOf.parent.get(n.id);
     const par = p && byId.get(p);
     if (par) {
-      const ang = Math.random() * Math.PI * 2;
-      n.x = par.x + Math.cos(ang) * 24 + (Math.random() - 0.5) * 8;
-      n.y = par.y + Math.sin(ang) * 24 + (Math.random() - 0.5) * 8;
+      const k = (spawnCount.get(p) || 0);
+      spawnCount.set(p, k + 1);
+      // golden-angle spiral: even spread, radius grows with sibling index so
+      // even a folder with hundreds of files never stacks them at one point
+      const ang = k * 2.399963 + Math.random() * 0.3;
+      const rad = (par.r || 6) + 18 + Math.sqrt(k) * 12;
+      n.x = par.x + Math.cos(ang) * rad;
+      n.y = par.y + Math.sin(ang) * rad;
     } else {
       const ang = Math.random() * Math.PI * 2;
       const rad = n.type === 'project' ? 70 : n.type === 'tag' ? 200 : 150;
@@ -111,6 +120,7 @@
     nodes = [];
     edges = [];
     byId = new Map();
+    spawnCount.clear();
     totalCount = allNodes.length;
 
     const incremental = opts.incremental && totalCount > 40;
@@ -178,8 +188,14 @@
   // Repulsion uses a spatial hash so graphs with 1000+ nodes stay smooth.
   const CELL = 100;
 
+  // MIN_D2: a floor on the squared distance used for repulsion, so two nodes
+  // seeded almost on top of each other can't produce a near-infinite force.
+  // MAXV: hard cap on how far a node may move per frame, so a force spike can
+  // never fling a node off to infinity (the old "everything flew away" bug).
+  const MIN_D2 = 36, MAXV = 22;
+
   function step() {
-    const repulse = 1500, springLen = 62, springK = 0.06, damp = 0.86, gravity = 0.016;
+    const repulse = 1400, springLen = 62, springK = 0.06, damp = 0.85, gravity = 0.016;
 
     const grid = new Map();
     for (const n of nodes) {
@@ -203,7 +219,7 @@
             let d2 = dx * dx + dy * dy;
             if (d2 < 1) { d2 = 1; dx = Math.random() - 0.5; dy = Math.random() - 0.5; }
             if (d2 > CELL * CELL * 2.6) continue;
-            const f = repulse / d2 * alpha;
+            const f = repulse / Math.max(MIN_D2, d2) * alpha;
             const d = Math.sqrt(d2);
             n.vx += (dx / d) * f;
             n.vy += (dy / d) * f;
@@ -229,6 +245,9 @@
       n.vx -= n.x * g;
       n.vy -= n.y * g;
       n.vx *= damp; n.vy *= damp;
+      // clamp speed so no single frame can teleport a node off-screen
+      const sp = Math.hypot(n.vx, n.vy);
+      if (sp > MAXV) { n.vx = n.vx / sp * MAXV; n.vy = n.vy / sp * MAXV; }
       n.x += n.vx; n.y += n.vy;
     }
     if (alpha > 0.03) alpha *= 0.995;
@@ -513,6 +532,15 @@
       alpha = Math.max(alpha, 0.5); // let the rest settle into the freed space
     },
     isTypeHidden(type) { return hiddenTypes.has(type); },
+    // internal: farthest active node from the center, for stability checks
+    _maxAbs() {
+      let m = 0;
+      for (const n of nodes) {
+        if (isHidden(n) || n.pinned) continue;
+        m = Math.max(m, Math.abs(n.x), Math.abs(n.y));
+      }
+      return { max: m, active: nodes.length };
+    },
     unpinAll() {
       for (const n of nodes) n.pinned = false;
       savePins();

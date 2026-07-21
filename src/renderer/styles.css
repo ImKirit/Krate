@@ -513,14 +513,32 @@ body[data-theme="light"] .lb-shine { background: linear-gradient(90deg, transpar
 #loadBar.fade { opacity: 0; }
 
 /* ---------------- what's new ---------------- */
-.wn-hero { display: grid; place-items: center; margin: 2px 0 12px; }
+.wn-hero { display: grid; place-items: center; margin: 2px 0 10px; }
 .wn-mark { width: 56px; height: 56px; border-radius: 13px; object-fit: cover; border: 2px solid var(--border); }
-.wn-list { display: flex; flex-direction: column; gap: 11px; margin: 14px 0 4px; }
-.wn-list > div { display: flex; gap: 11px; align-items: flex-start; font-size: 13.8px; line-height: 1.5; }
-.wn-list .wn-dot {
-  flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%;
-  background: #f5b301; margin-top: 6px;
+.wn-scroll { margin: 12px 0 2px; display: flex; flex-direction: column; gap: 14px; }
+
+/* a category block: coloured header + its bullets, with a tinted left rail */
+.wn-group {
+  border-left: 3px solid var(--cat);
+  padding: 2px 0 2px 14px;
 }
+.wn-cat {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--cat); margin-bottom: 9px;
+}
+.wn-cat-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cat); }
+
+.wn-item { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 9px; }
+.wn-item:last-child { margin-bottom: 0; }
+.wn-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
+.wn-body { font-size: 13.6px; line-height: 1.5; }
+.wn-body > div:first-child { font-weight: 600; }
+
+/* sub-bullets: indented, lighter, hollow ticks — shows the "belongs to" link */
+.wn-sub { margin-top: 7px; display: flex; flex-direction: column; gap: 6px; }
+.wn-sub > div { display: flex; gap: 9px; align-items: flex-start; color: var(--muted); font-size: 12.8px; font-weight: 500; line-height: 1.45; }
+.wn-tick { flex-shrink: 0; width: 7px; height: 7px; border-radius: 2px; border: 2px solid; margin-top: 5px; }
 
 /* ---------------- boot screen ----------------
    Folders get packed into the K: two folder chips and a file chip slide
